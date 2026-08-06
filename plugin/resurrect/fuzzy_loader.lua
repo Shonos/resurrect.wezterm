@@ -59,82 +59,33 @@ local function find_json_files_recursive(base_path)
 	local suc, err
 
 	if utils.is_windows then
-		-- For Windows, use VBS for better performance and truly invisible execution
-		local temp_vbs = os.tmpname() .. ".vbs"
-		local temp_out = os.tmpname() .. ".txt"
-
-		local vbs_script = string.format(
-			[[
-                Set fso = CreateObject("Scripting.FileSystemObject")
-                Set outFile = fso.CreateTextFile("%s", True)
-                
-                Sub ProcessFolder(folderPath)
-                    On Error Resume Next
-                    Set folder = fso.GetFolder(folderPath)
-                    If Err.Number <> 0 Then
-                        Exit Sub
-                    End If
-                    
-                    ' Process files in current folder
-                    For Each file in folder.Files
-                        If LCase(fso.GetExtensionName(file.Name)) = "json" Then
-                            epoch = DateDiff("s", "01/01/1970 00:00:00", file.DateLastModified)
-                            outFile.WriteLine(epoch & " " & file.Path)
-                        End If
-                    Next
-                    
-                    ' Process subfolders recursively
-                    For Each subFolder in folder.SubFolders
-                        ProcessFolder(subFolder.Path)
-                    Next
-                End Sub
-                
-                ProcessFolder("%s")
-                outFile.Close
-            ]],
-			temp_out:gsub("\\", "\\\\"),
-			base_path:gsub("\\", "\\\\")
-		)
-
-		-- Create a second VBS script that will run the first one invisibly
-		local launcher_vbs = os.tmpname() .. "_launcher.vbs"
-		local launcher_script = string.format(
-			[[
-                Set WshShell = CreateObject("WScript.Shell")
-                WshShell.Run "wscript.exe //nologo %s", 0, True
-            ]],
-			temp_vbs
-		)
-
-		-- Write the scripts
-		suc, err = file_io.write_file(temp_vbs, vbs_script)
-		if not suc then
-			wezterm.emit("resurrect.error", err)
-			return
+		-- Use wezterm's native, in-process glob instead of shelling out to a
+		-- chain of temp VBS scripts via wscript.exe. The old approach spawned
+		-- processes and, when it returned nothing, left fmt_cost uninitialized
+		-- -> crash in insert_choices ("arithmetic on nil value (field
+		-- 'str_date')"). State lives one level deep: <dir>/{workspace,window,
+		-- tab}/*.json. wezterm.glob doesn't support "**" on Windows, but a
+		-- single-level "<dir>/*/*.json" does and is all we need. glob returns
+		-- forward-slash paths, which the line parser below already handles.
+		-- The parser expects "epoch path" lines; epoch is only used for the
+		-- optional date display (show_state_with_date, off by default), so we
+		-- prefix a placeholder 0.
+		local sep = utils.separator
+		local base = base_path
+		if base:sub(-#sep) == sep then
+			base = base:sub(1, -#sep - 1)
 		end
 
-		suc, err = file_io.write_file(launcher_vbs, launcher_script)
-		if not suc then
-			wezterm.emit("resurrect.error", err)
-			os.remove(temp_vbs) -- by the time we are here the `temb_vbs` file already exists so we should clean up
-			return
+		local ok, matches = pcall(wezterm.glob, base .. sep .. "*" .. sep .. "*.json")
+		if not ok or not matches then
+			return ""
 		end
-		-- Execute using launcher (completely hidden)
-		os.execute("wscript.exe //nologo " .. launcher_vbs)
 
-		suc, stdout = file_io.read_file(temp_out)
-
-		-- Clean up temp files
-		os.remove(temp_vbs)
-		os.remove(launcher_vbs)
-		os.remove(temp_out)
-
-		if suc then
-			return stdout
-		else
-			wezterm.emit("resurrect.error", stdout)
-			return
+		local lines = {}
+		for _, path in ipairs(matches) do
+			lines[#lines + 1] = "0 " .. path
 		end
+		return table.concat(lines, "\n")
 	elseif utils.is_mac then
 		-- macOS recursive find command for JSON files
 		cmd = 'find "' .. base_path .. '" -type f -name "*.json" -print0 | xargs -0 stat -f "%m %N"'

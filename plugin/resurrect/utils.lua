@@ -68,14 +68,18 @@ function utils.execute(cmd)
 	end
 end
 
--- Create the folder if it does not exist
----@param path string
+-- Create the folder if it does not exist.
+-- On Windows the original implementation shelled out to os.execute("mkdir ..."),
+-- which flashed a console window on every startup/save and used a malformed
+-- `mkdir /p "..."` command (invalid flag + broken quote escaping) that silently
+-- failed, so the workspace/window/tab subfolders were never created and every
+-- save failed. Wezterm's Lua has no native mkdir; on Windows we skip the spawn
+-- and rely on the state folders existing (create them once in your config).
 function utils.ensure_folder_exists(path)
 	if utils.is_windows then
-		os.execute('mkdir /p "' .. path:gsub("/", "\\" .. '"'))
-	else
-		os.execute('mkdir -p "' .. path .. '"')
+		return
 	end
+	os.execute('mkdir -p "' .. path .. '"')
 end
 
 -- deep copy
