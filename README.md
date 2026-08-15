@@ -18,6 +18,27 @@ Resurrect your terminal environment!⚰️ A plugin to save the state of your wi
 - Re-attach to remote domains (e.g. SSH, SSHMUX, WSL, Docker, ect.).
 - Optionally enable encryption and decryption of the saved state.
 
+## Using the Shonos fork
+
+This fork exposes the same API as upstream, but its `plugin/init.lua` still
+looks the plugin up by the upstream `MLFlexer` keyword. When using this fork you
+must register a keyword substitution via
+[dev.wezterm](https://github.com/chrisgve/dev.wezterm) before requiring the
+plugin, otherwise it fails to find its own directory:
+
+```lua
+local wezterm = require("wezterm")
+
+local dev = wezterm.plugin.require("https://github.com/chrisgve/dev.wezterm")
+dev.set_substitutions({ MLFlexer = "Shonos" })
+
+local resurrect = wezterm.plugin.require("https://github.com/Shonos/resurrect.wezterm")
+```
+
+A complete working configuration (PowerShell, periodic save, startup restore and
+fuzzy save/load keybindings) is available in
+[`examples/wezterm.lua`](examples/wezterm.lua).
+
 ## Setup example
 
 1. Require the plugin:
