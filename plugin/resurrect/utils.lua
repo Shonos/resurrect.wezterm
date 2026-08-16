@@ -82,6 +82,22 @@ function utils.ensure_folder_exists(path)
 	os.execute('mkdir -p "' .. path .. '"')
 end
 
+-- Sanitize a title so it can be used as a safe file name.
+-- Windows disallows these characters in file names: < > : " / \ | ? *
+---@param name string|nil
+---@return string|nil
+function utils.sanitize_filename(name)
+	if name == nil then
+		return name
+	end
+	local clean = name:gsub('[<>:"/\\|?*]', "_")
+	clean = clean:gsub("[ \t%.]+$", "")
+	if clean == "" then
+		clean = "untitled"
+	end
+	return clean
+end
+
 -- deep copy
 ---@param original table
 ---@return any copy
