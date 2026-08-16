@@ -16,7 +16,7 @@ local function get_file_path(file_name, type, opt_name)
 		"%s%s" .. utils.separator .. "%s.json",
 		pub.save_state_dir,
 		type,
-		file_name:gsub(utils.separator, "+")
+		utils.sanitize_filename(file_name):gsub(utils.separator, "+")
 	)
 end
 
